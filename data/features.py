@@ -1,10 +1,3 @@
-"""
-vybe/data/features.py
----------------------
-Build model_table: one row per NTA, prediction_time = now.
-Aggregates historical data into per-neighborhood features.
-"""
-
 import pandas as pd
 from datetime import datetime
 

@@ -1,26 +1,7 @@
-"""
-vybe/models/train.py
---------------------
-Train RF + XGBoost classifiers for neighborhood condition prediction.
-Auto-selects the best model per target based on AUC.
-
-Targets (all use 75th percentile threshold — high vs low):
-  - active_noise_next_2h
-  - active_complaints_next_2h
-  - active_subway_ridership_next_2h
-  - active_subway_transfers_next_2h
-  - high_traffic_volume_next_2h
-"""
-
 import pandas as pd
 from xgboost import XGBClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
-
-
-# ---------------------------------------------------------------------------
-# Core training util
-# ---------------------------------------------------------------------------
 
 def train_best(X_train, Y_train, X_test, Y_test, verbose: bool = True):
     """
@@ -71,11 +52,6 @@ def date_split(df: pd.DataFrame, features: list, target_col: str, quantile: floa
     X_test  = df[df["prediction_time"] >= split_date][features].fillna(0)
     Y_test  = df[df["prediction_time"] >= split_date][target_col]
     return X_train, Y_train, X_test, Y_test
-
-
-# ---------------------------------------------------------------------------
-# Noise + complaints model
-# ---------------------------------------------------------------------------
 
 NOISE_COMPLAINT_FEATURES = [
     "noise_last_24h", "complaints_last_24h",
@@ -184,11 +160,6 @@ def train_noise_complaint_models(train_df: pd.DataFrame, model_table: pd.DataFra
 
     return models, results, model_table
 
-
-# ---------------------------------------------------------------------------
-# Subway model
-# ---------------------------------------------------------------------------
-
 SUBWAY_FEATURES = [
     "subway_ridership_last_24h", "subway_transfers_last_24h",
     "hour", "day_of_week", "is_weekend"
@@ -257,11 +228,6 @@ def train_subway_models(model_table_subway: pd.DataFrame):
         subway_results[target] = {"accuracy": accuracy_score(Y_test, pred), "auc": best_auc}
 
     return subway_models, subway_results, model_table_subway
-
-
-# ---------------------------------------------------------------------------
-# Traffic model
-# ---------------------------------------------------------------------------
 
 TRAFFIC_FEATURES = ["traffic_volume_last_24h", "hour", "day_of_week", "is_weekend"]
 

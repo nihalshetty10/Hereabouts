@@ -1,10 +1,3 @@
-"""
-vybe/data/clean.py
-------------------
-Clean and type-cast each raw dataset.
-Each function takes a raw DataFrame and returns a cleaned one.
-"""
-
 import pandas as pd
 
 
@@ -39,31 +32,31 @@ def clean_crime(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def clean_crashes(df: pd.DataFrame) -> pd.DataFrame:
+def clean_crime(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df["crash_date"] = pd.to_datetime(df["crash_date"], errors="coerce")
-    if "crash_time" in df.columns:
-        df["crash_time"] = df["crash_time"].astype(str).str.strip()
-    df["crash_datetime"] = pd.to_datetime(
-        df["crash_date"].astype(str) + " " + df.get("crash_time", "00:00").astype(str),
-        errors="coerce"
-    )
+    df["cmplnt_fr_dt"] = pd.to_datetime(df["cmplnt_fr_dt"], errors="coerce")
     df["latitude"]  = pd.to_numeric(df["latitude"],  errors="coerce")
     df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
-    df["collision_id"] = df["collision_id"].astype(str)
+    df["cmplnt_num"] = df["cmplnt_num"].astype(str)
+    df["addr_pct_cd"] = df["addr_pct_cd"].astype(str).str.replace(".0", "", regex=False)
+    df["ky_cd"] = df["ky_cd"].astype(str).str.replace(".0", "", regex=False)
+    df["pd_cd"] = (
+        pd.to_numeric(df["pd_cd"], errors="coerce")
+        .astype("Int64")
+        .astype(str)
+        .replace("<NA>", pd.NA)
+    )
 
-    count_cols = [
-        "number_of_persons_injured", "number_of_persons_killed",
-        "number_of_pedestrians_injured", "number_of_pedestrians_killed",
-        "number_of_cyclist_injured", "number_of_cyclist_killed",
-        "number_of_motorist_injured", "number_of_motorist_killed"
+    text_cols = [
+        "ofns_desc", "pd_desc", "crm_atpt_cptd_cd", "law_cat_cd",
+        "boro_nm", "loc_of_occur_desc", "prem_typ_desc",
+        "juris_desc", "patrol_boro", "station_name"
     ]
-    for col in count_cols:
+    for col in text_cols:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
-
-    df = df.dropna(subset=["latitude", "longitude"])
-    df = df.drop_duplicates(subset=["collision_id"])
+            df[col] = df[col].astype(str).str.strip().str.lower()
+    df = df.dropna(subset=["cmplnt_fr_dt"])
+    df = df.drop_duplicates(subset=["cmplnt_num"])
     return df
 
 
