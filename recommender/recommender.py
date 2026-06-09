@@ -46,7 +46,13 @@ Think carefully about what this activity actually needs:
 - Running/biking: low noise, low traffic, low crime, good weather. Crowds and events are BAD.
 - Night out/bars/clubs: nearby events, active subway, lively atmosphere. Noise and crowding are GOOD. Low noise is NOT a bonus.
 - Coffee/study: very quiet, low crowding, low noise. Events nearby are BAD.
-- Park/outdoor: low crime, good weather, low traffic. Events neutral or good.
+- Park/outdoor/picnic: low crime, good weather, low traffic. Events neutral.
+- Eating/dinner/brunch: transit access, moderate crowding OK, crime matters. Events neutral. Noise neutral.
+- Dating/romantic: quiet, safe, good weather, low crowding. Some events OK.
+- Shopping: transit access, low crime, moderate crowding fine. Events neutral.
+- Commuting/travel: high subway ridership = GOOD. Traffic neutral. Everything else secondary.
+- Meditation/yoga: very quiet, very low crowding, low noise. Like coffee but even more quiet.
+- Exploring/photography: low crime, good weather. Everything else neutral.
 
 For each signal below, assign a weight from -2 to +2 based on the specific activity above:
 - Negative = makes neighborhood WORSE for this activity
@@ -151,6 +157,120 @@ def default_weights(activity: str) -> dict:
             "crashes_last_7d": -0.5,
             "persons_injured_last_7d": -0.5,
             "weather_score": 1.0
+        }
+    elif any(w in activity_lower for w in ["eat", "dinner", "lunch", "brunch", "food", "restaurant"]):
+        return {
+            "prob_active_noise_next_2h": 0.0,
+            "prob_active_complaints_next_2h": -0.5,
+            "prob_high_traffic_volume_next_2h": 0.0,
+            "prob_active_subway_ridership_next_2h": 1.5,
+            "prob_active_subway_transfers_next_2h": 1.0,
+            "bluesky_noise_signal": 0.0,
+            "bluesky_traffic_signal": 0.0,
+            "bluesky_crowding_signal": 0.5,
+            "bluesky_safety_signal": -1.5,
+            "bluesky_negative_signal": -1.0,
+            "nearby_events_count": 0.0,
+            "has_major_event": 0.0,
+            "crime_last_7d": -1.5,
+            "crashes_last_7d": -0.5,
+            "persons_injured_last_7d": -0.5,
+            "weather_score": 1.0
+        }
+    elif any(w in activity_lower for w in ["date", "dating", "romantic"]):
+        return {
+            "prob_active_noise_next_2h": -1.0,
+            "prob_active_complaints_next_2h": -0.5,
+            "prob_high_traffic_volume_next_2h": -0.5,
+            "prob_active_subway_ridership_next_2h": 1.0,
+            "prob_active_subway_transfers_next_2h": 0.5,
+            "bluesky_noise_signal": -1.0,
+            "bluesky_traffic_signal": -0.5,
+            "bluesky_crowding_signal": -1.0,
+            "bluesky_safety_signal": -2.0,
+            "bluesky_negative_signal": -1.0,
+            "nearby_events_count": 0.5,
+            "has_major_event": 0.0,
+            "crime_last_7d": -2.0,
+            "crashes_last_7d": -0.5,
+            "persons_injured_last_7d": -0.5,
+            "weather_score": 1.5
+        }
+    elif any(w in activity_lower for w in ["shop", "shopping", "market", "store"]):
+        return {
+            "prob_active_noise_next_2h": 0.0,
+            "prob_active_complaints_next_2h": -0.5,
+            "prob_high_traffic_volume_next_2h": -0.5,
+            "prob_active_subway_ridership_next_2h": 2.0,
+            "prob_active_subway_transfers_next_2h": 1.5,
+            "bluesky_noise_signal": 0.0,
+            "bluesky_traffic_signal": -0.5,
+            "bluesky_crowding_signal": 0.5,
+            "bluesky_safety_signal": -1.5,
+            "bluesky_negative_signal": -1.0,
+            "nearby_events_count": 0.5,
+            "has_major_event": 0.0,
+            "crime_last_7d": -1.5,
+            "crashes_last_7d": -0.5,
+            "persons_injured_last_7d": -0.5,
+            "weather_score": 1.0
+        }
+    elif any(w in activity_lower for w in ["commute", "travel", "transit", "subway"]):
+        return {
+            "prob_active_noise_next_2h": 0.0,
+            "prob_active_complaints_next_2h": 0.0,
+            "prob_high_traffic_volume_next_2h": -1.0,
+            "prob_active_subway_ridership_next_2h": 2.0,
+            "prob_active_subway_transfers_next_2h": 2.0,
+            "bluesky_noise_signal": 0.0,
+            "bluesky_traffic_signal": -1.0,
+            "bluesky_crowding_signal": 0.0,
+            "bluesky_safety_signal": -1.0,
+            "bluesky_negative_signal": -0.5,
+            "nearby_events_count": 0.0,
+            "has_major_event": 0.0,
+            "crime_last_7d": -1.0,
+            "crashes_last_7d": -0.5,
+            "persons_injured_last_7d": -0.5,
+            "weather_score": 0.5
+        }
+    elif any(w in activity_lower for w in ["meditate", "yoga", "mindful", "quiet"]):
+        return {
+            "prob_active_noise_next_2h": -2.0,
+            "prob_active_complaints_next_2h": -1.5,
+            "prob_high_traffic_volume_next_2h": -1.0,
+            "prob_active_subway_ridership_next_2h": 0.0,
+            "prob_active_subway_transfers_next_2h": 0.0,
+            "bluesky_noise_signal": -2.0,
+            "bluesky_traffic_signal": -1.0,
+            "bluesky_crowding_signal": -2.0,
+            "bluesky_safety_signal": -1.5,
+            "bluesky_negative_signal": -1.0,
+            "nearby_events_count": -1.5,
+            "has_major_event": -2.0,
+            "crime_last_7d": -1.5,
+            "crashes_last_7d": -0.5,
+            "persons_injured_last_7d": -0.5,
+            "weather_score": 2.0
+        }
+    elif any(w in activity_lower for w in ["explore", "photo", "walk around", "wander", "tourist"]):
+        return {
+            "prob_active_noise_next_2h": 0.0,
+            "prob_active_complaints_next_2h": -0.5,
+            "prob_high_traffic_volume_next_2h": -0.5,
+            "prob_active_subway_ridership_next_2h": 1.0,
+            "prob_active_subway_transfers_next_2h": 0.5,
+            "bluesky_noise_signal": 0.0,
+            "bluesky_traffic_signal": -0.5,
+            "bluesky_crowding_signal": 0.0,
+            "bluesky_safety_signal": -1.5,
+            "bluesky_negative_signal": -1.0,
+            "nearby_events_count": 1.0,
+            "has_major_event": 0.5,
+            "crime_last_7d": -2.0,
+            "crashes_last_7d": -0.5,
+            "persons_injured_last_7d": -0.5,
+            "weather_score": 2.0
         }
     else:
         return {
@@ -260,17 +380,16 @@ def run_recommender(
 
     scored = model_table.copy()
 
-    scored_norm = scored.copy()
     for col in ["nearby_events_count", "crime_last_7d", "crashes_last_7d",
                 "persons_injured_last_7d", "noise_last_24h", "complaints_last_24h",
                 "subway_ridership_last_24h", "subway_transfers_last_24h",
                 "traffic_volume_last_24h"]:
-        if col in scored_norm.columns:
-            col_max = scored_norm[col].max()
+        if col in scored.columns:
+            col_max = scored[col].max()
             if col_max > 0:
-                scored_norm[col] = scored_norm[col] / col_max
+                scored[col] = scored[col] / col_max
 
-    scored["score"] = scored_norm.apply(lambda row: math_score(row, weights), axis=1)
+    scored["score"] = scored.apply(lambda row: math_score(row, weights), axis=1)
 
     lo, hi = scored["score"].min(), scored["score"].max()
     if hi > lo:
