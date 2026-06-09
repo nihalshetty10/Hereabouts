@@ -10,7 +10,6 @@ from groq import Groq
 load_dotenv()
 
 _client: Groq | None = None
-_llm_warned = False
 
 
 def _groq_client() -> Groq:
@@ -129,13 +128,10 @@ Post:
         return json.loads(text)
 
     except Exception as e:
-        global _llm_warned
-        if not _llm_warned:
-            print(f"LLM classification failed, using keyword fallback: {e}")
-            _llm_warned = True
+        print(f"LLM classification failed, using keyword fallback: {e}")
         return _keyword_fallback(post_text)
-
-
+ 
+ 
 def build_bluesky_signals(df_bluesky: pd.DataFrame) -> pd.DataFrame:
     if df_bluesky.empty:
         print("No Bluesky posts to classify")

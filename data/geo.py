@@ -5,7 +5,7 @@ from shapely import wkt
 
 
 NTA_GEOJSON_URL = "https://data.cityofnewyork.us/resource/9nt8-h7nd.geojson"
-NTA_FILE = "nyc_nta.geojson"-----------------------------------------------------------------------
+NTA_FILE = "nyc_nta.geojson"
 
 def load_nta(filepath: str = NTA_FILE) -> gpd.GeoDataFrame:
     """
