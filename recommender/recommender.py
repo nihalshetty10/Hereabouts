@@ -300,7 +300,7 @@ def math_score(row: pd.Series, weights: dict) -> float:
     return raw
 
 def generate_explanation(row: pd.Series, activity: str) -> dict:
-    prompt = f"""You are generating a neighborhood recommendation for a NYC app called Vybe.
+    prompt = f"""You are generating a neighborhood recommendation for a NYC app called Hereabouts.
 
 Activity: {activity}
 Neighborhood: {row["ntaname"]}
@@ -379,6 +379,7 @@ def run_recommender(
     print(f"Weights used: {weights}")
 
     scored = model_table.copy()
+    original_events_count = scored["nearby_events_count"].copy()
 
     for col in ["nearby_events_count", "crime_last_7d", "crashes_last_7d",
                 "persons_injured_last_7d", "noise_last_24h", "complaints_last_24h",
@@ -390,6 +391,7 @@ def run_recommender(
                 scored[col] = scored[col] / col_max
 
     scored["score"] = scored.apply(lambda row: math_score(row, weights), axis=1)
+    scored["nearby_event_count"] = original_events_count
 
     lo, hi = scored["score"].min(), scored["score"].max()
     if hi > lo:

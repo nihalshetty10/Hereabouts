@@ -17,7 +17,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 
 limiter= Limiter(key_func=get_remote_address)
-app = FastAPI(title = "Vybe", version = "1.0.0")
+app = FastAPI(title = "Hereabouts", version = "1.0.0")
 app.state.limiter = limiter
 app.add_middleware(
     CORSMiddleware,

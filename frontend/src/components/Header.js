@@ -8,18 +8,12 @@ export default function Header({
   onCustomInputChange,
   onCustomSubmit,
   customLoading,
-  lastUpdated,
   isCustomMode,
 }) {
   return (
     <header className="header">
       <div className="header-left">
-        <span className="logo">vybe</span>
-        {lastUpdated && (
-          <span className="last-updated">
-            Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        )}
+        <span className="logo">hereabouts</span>
       </div>
 
       <div className="header-right">

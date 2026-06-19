@@ -1,10 +1,3 @@
-"""
-vybe/models/predict.py
-----------------------
-Assemble model_table_final from model_table + trained model outputs.
-This is what gets exported to CSV and loaded by the recommender.
-"""
-
 import pandas as pd
 
 
