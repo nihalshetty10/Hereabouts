@@ -13,6 +13,12 @@ from slowapi.errors import RateLimitExceeded
 
 load_dotenv()
 
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_TABLE_PATH = os.getenv(
+    "MODEL_TABLE_PATH",
+    os.path.join(ROOT_DIR, "data", "model_table_final.csv"),
+)
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 
@@ -129,11 +135,9 @@ async def custom_recommendations(request: Request, body: CustomRequest):
     try:
         output = run_recommender(
             activity=activity,
-            model_table_path=os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                "model_table_final.csv"
-            ),
-            output_path="/tmp/custom_scored.csv"
+            model_table_path=MODEL_TABLE_PATH,
+            output_path="/tmp/custom_scored.csv",
+            generate_explanations=False,
         )
         return output.fillna("").to_dict("records")
     except Exception as e:

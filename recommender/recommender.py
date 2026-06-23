@@ -369,16 +369,24 @@ def fallback_explanation(row: pd.Series, activity: str) -> dict:
 def run_recommender(
     activity: str,
     model_table_path: str = "model_table_final.csv",
-    output_path: str = "scored_table.csv"
+    output_path: str = "scored_table.csv",
+    generate_explanations: bool = True,
 ) -> pd.DataFrame:
     print(f"\nRunning recommender for: '{activity}'")
     model_table = pd.read_csv(model_table_path)
     print(f"Loaded {len(model_table)} neighborhoods")
 
-    import sys
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from data.geo import attach_nta_centroids
-    model_table = attach_nta_centroids(model_table)
+    has_coords = (
+        "latitude" in model_table.columns
+        and "longitude" in model_table.columns
+        and model_table["latitude"].notna().all()
+        and model_table["longitude"].notna().all()
+    )
+    if not has_coords:
+        import sys
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from data.geo import attach_nta_centroids
+        model_table = attach_nta_centroids(model_table)
 
     weights = get_activity_weights(activity)
     print(f"Weights used: {weights}")
@@ -419,13 +427,14 @@ def run_recommender(
     scored["pros"]    = ""
     scored["cons"]    = ""
 
-    for i, row in scored.head(TOP_N_EXPLANATIONS).iterrows():
-        print(f"  {i+1}/{TOP_N_EXPLANATIONS} — {row['ntaname']}")
-        result = generate_explanation(row, activity)
-        scored.at[i, "summary"] = result["summary"]
-        scored.at[i, "pros"]    = " | ".join(result["pros"]) if result["pros"] else ""
-        scored.at[i, "cons"]    = result["cons"]
-        time.sleep(2)
+    if generate_explanations:
+        for i, row in scored.head(TOP_N_EXPLANATIONS).iterrows():
+            print(f"  {i+1}/{TOP_N_EXPLANATIONS} — {row['ntaname']}")
+            result = generate_explanation(row, activity)
+            scored.at[i, "summary"] = result["summary"]
+            scored.at[i, "pros"]    = " | ".join(result["pros"]) if result["pros"] else ""
+            scored.at[i, "cons"]    = result["cons"]
+            time.sleep(2)
 
     output_cols = [
         "ntaname", "score", "label", "summary", "pros", "cons",
