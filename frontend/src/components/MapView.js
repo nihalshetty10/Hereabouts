@@ -104,7 +104,7 @@ export default function MapView({
           </Map>
      
           <div className="legend">
-            {[['Great','#22C55E'],['Good','#3B82F6'],['Fair','#F59E0B'],['Poor','#EF4444']].map(([label, color]) => (
+            {[['Great','#22C55E'],['Good','#F59E0B'],['Fair','#3B82F6'],['Poor','#EF4444']].map(([label, color]) => (
               <div key={label} className="legend-item">
                 <div className="legend-dot" style={{ background: color }} />
                 <span>{label}</span>

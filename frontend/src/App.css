@@ -9,8 +9,8 @@
   --text-muted: #7B7B8F;
   --accent:     #7C6EFA;
   --great:      #22C55E;
-  --good:       #3B82F6;
-  --fair:       #F59E0B;
+  --good:       #F59E0B;
+  --fair:       #3B82F6;
   --poor:       #EF4444;
   --radius:     10px;
   --font:       'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -357,7 +357,7 @@ body {
 }
 
 .popup-name {
-  color: var(--text);
+  color: #000;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.3;

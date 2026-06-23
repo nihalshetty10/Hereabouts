@@ -1,7 +1,7 @@
 export const SCORE_COLORS = {
     'Great': '#22C55E',
-    'Good': '#3B82F6',
-    'Fair': '#F59E0B',
+    'Good': '#F59E0B',
+    'Fair': '#3B82F6',
     'Poor': '#EF4444',
 }
 
