@@ -1,8 +1,11 @@
 import React from 'react'
+import maplibregl from 'maplibre-gl'
 import Map, { Source, Layer, Marker } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { getScoreColor } from '../utils/helpers'
 import DetailPopup from './DetailPopup'
+
+maplibregl.setWorkerUrl(`${process.env.PUBLIC_URL}/maplibre-gl-csp-worker.js`)
 
 const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 
