@@ -74,11 +74,45 @@ export default function App() {
       })
       updateNeighborhood('__replace__', res.data)
       setIsCustomMode(true)
+      setSelectedNta(null)
+      setSelectedDetail(null)
+      setPopupInfo(null)
     } catch (e) {
       if (e.response?.status === 429) alert('Custom activity limit: 1 request per day.')
       else alert('Failed to score custom activity. Try again.')
     } finally {
       setCustomLoading(false)
+    }
+  }
+
+  const loadNeighborhoodDetail = async (ntaname, rec) => {
+    if (!rec || rec.summary) return rec
+
+    setLoadingDetail(true)
+    try {
+      if (isCustomMode) {
+        const res = await axios.post(`${API_URL}/recommendations/custom/explain`, {
+          activity: customInput.trim(),
+          ntaname,
+        })
+        const updated = { ...rec, ...res.data }
+        setSelectedDetail(updated)
+        updateNeighborhood(ntaname, res.data)
+        return updated
+      }
+
+      const res = await axios.get(
+        `${API_URL}/neighborhoods/${encodeURIComponent(ntaname)}`,
+        { params: { activity } }
+      )
+      setSelectedDetail(res.data)
+      updateNeighborhood(ntaname, res.data)
+      return res.data
+    } catch (e) {
+      console.error('Failed to load neighborhood detail:', e)
+      return rec
+    } finally {
+      setLoadingDetail(false)
     }
   }
 
@@ -98,24 +132,12 @@ export default function App() {
     setSelectedDetail(rec || null)
     setPopupInfo({ lng: e.lngLat.lng, lat: e.lngLat.lat })
 
-    if (rec && !rec.summary && !isCustomMode) {
-      setLoadingDetail(true)
-      try {
-        const res = await axios.get(
-          `${API_URL}/neighborhoods/${encodeURIComponent(ntaname)}`,
-          { params: { activity } }
-        )
-        setSelectedDetail(res.data)
-        updateNeighborhood(ntaname, res.data)
-      } catch (e) {
-        console.error('Failed to load neighborhood detail:', e)
-      } finally {
-        setLoadingDetail(false)
-      }
+    if (rec && !rec.summary) {
+      await loadNeighborhoodDetail(ntaname, rec)
     }
   }
 
-  const handleNeighborhoodClick = (rec) => {
+  const handleNeighborhoodClick = async (rec) => {
     setSelectedNta(rec.ntaname)
     setSelectedDetail(rec)
     setPopupInfo(rec.latitude && rec.longitude
@@ -128,6 +150,9 @@ export default function App() {
         zoom: 14,
         duration: 800
       })
+    }
+    if (!rec.summary) {
+      await loadNeighborhoodDetail(rec.ntaname, rec)
     }
   }
 

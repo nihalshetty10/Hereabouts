@@ -92,8 +92,14 @@ No explanation. No markdown."""
         text = re.sub(r",\s*}", "}", text)
         text = re.sub(r",\s*]", "]", text)
         weights = json.loads(text)
+        cleaned = {}
+        for key, value in weights.items():
+            try:
+                cleaned[key] = float(value)
+            except (TypeError, ValueError):
+                cleaned[key] = 0.0
         print(f"Weights generated for: {activity}")
-        return weights
+        return cleaned
     except Exception as e:
         print(f"LLM weight generation failed: {e} — using defaults")
         return default_weights(activity)
@@ -366,15 +372,12 @@ def fallback_explanation(row: pd.Series, activity: str) -> dict:
         ]
     }
 
-def run_recommender(
+def score_activity(
     activity: str,
     model_table_path: str = "model_table_final.csv",
-    output_path: str = "scored_table.csv",
-    generate_explanations: bool = True,
 ) -> pd.DataFrame:
-    print(f"\nRunning recommender for: '{activity}'")
+    """Score all neighborhoods for an activity. Returns full feature dataframe."""
     model_table = pd.read_csv(model_table_path)
-    print(f"Loaded {len(model_table)} neighborhoods")
 
     has_coords = (
         "latitude" in model_table.columns
@@ -389,8 +392,6 @@ def run_recommender(
         model_table = attach_nta_centroids(model_table)
 
     weights = get_activity_weights(activity)
-    print(f"Weights used: {weights}")
-
     scored = model_table.copy()
     original_events_count = scored["nearby_events_count"].copy()
 
@@ -418,7 +419,35 @@ def run_recommender(
         labels=["Poor", "Fair", "Good", "Great"],
         include_lowest=True
     )
-    scored = scored.sort_values("score", ascending=False).reset_index(drop=True)
+    return scored.sort_values("score", ascending=False).reset_index(drop=True)
+
+
+def explain_neighborhood(scored: pd.DataFrame, activity: str, ntaname: str) -> dict:
+    """Generate summary/pros/cons for one neighborhood. Does not persist."""
+    matches = scored[scored["ntaname"] == ntaname]
+    if matches.empty:
+        raise ValueError(f"Neighborhood not found: {ntaname}")
+
+    row = matches.iloc[0]
+    result = generate_explanation(row, activity)
+    return {
+        "ntaname": ntaname,
+        "summary": result.get("summary", ""),
+        "pros": " | ".join(result.get("pros", [])) if result.get("pros") else "",
+        "cons": result.get("cons", ""),
+    }
+
+
+def run_recommender(
+    activity: str,
+    model_table_path: str = "model_table_final.csv",
+    output_path: str = "scored_table.csv",
+    generate_explanations: bool = True,
+) -> pd.DataFrame:
+    print(f"\nRunning recommender for: '{activity}'")
+    print(f"Loaded model table from {model_table_path}")
+
+    scored = score_activity(activity, model_table_path)
     print(f"Scored {len(scored)} neighborhoods")
     print(scored[["ntaname", "score", "label"]].head(5).to_string())
 

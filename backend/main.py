@@ -107,10 +107,9 @@ def get_neighborhood(ntaname: str, activity: str = "night_out"):
     return row_dict
 
 def _generate_and_cache(row: dict, activity_key: str) -> dict:
-    _load_run_recommender()
-    from recommender.recommender import generate_explanation
+    rec = _load_recommender()
     row_series = pd.Series(row)
-    result = generate_explanation(row_series, activity_key)
+    result = rec.generate_explanation(row_series, activity_key)
     summary = result.get("summary", "")
     pros = " | ".join(result.get("pros", [])) if result.get("pros") else ""
     cons = result.get("cons", "") if isinstance(result.get("cons"), str) else (result.get("cons", [""])[0] if result.get("cons") else "")
@@ -139,26 +138,59 @@ class CustomRequest(BaseModel):
     activity: str
 
 
-def _load_run_recommender():
+class CustomExplainRequest(BaseModel):
+    activity: str
+    ntaname: str
+
+
+_custom_score_cache: dict[str, pd.DataFrame] = {}
+
+
+def _load_recommender():
     for path in (BACKEND_DIR, ROOT_DIR):
         if path not in sys.path:
             sys.path.insert(0, path)
-    from recommender.recommender import run_recommender
-    return run_recommender
+    from recommender import recommender as rec
+    return rec
+
+
+def _load_run_recommender():
+    return _load_recommender().run_recommender
+
+
+def _cache_key(activity: str) -> str:
+    return activity.strip().lower()
 
 
 def _score_custom_activity(activity: str) -> list:
-    run_recommender = _load_run_recommender()
-    output = run_recommender(
-        activity=activity,
-        model_table_path=_resolve_model_table_path(),
-        output_path="/tmp/custom_scored.csv",
-        generate_explanations=False,
-    )
-    records = output.copy()
-    for col in records.select_dtypes(include=["category"]).columns:
-        records[col] = records[col].astype(str)
-    return json.loads(records.fillna("").to_json(orient="records"))
+    rec = _load_recommender()
+    scored = rec.score_activity(activity, _resolve_model_table_path())
+    _custom_score_cache[_cache_key(activity)] = scored
+
+    output_cols = [
+        "ntaname", "score", "label", "summary", "pros", "cons",
+        "nearby_events_count", "nearby_event_titles", "nearby_event_types",
+        "has_major_event", "latitude", "longitude",
+    ]
+    output = scored.copy()
+    output["summary"] = ""
+    output["pros"] = ""
+    output["cons"] = ""
+    output_cols = [c for c in output_cols if c in output.columns]
+    output = output[output_cols]
+    for col in output.select_dtypes(include=["category"]).columns:
+        output[col] = output[col].astype(str)
+    return json.loads(output.fillna("").to_json(orient="records"))
+
+
+def _explain_custom_neighborhood(activity: str, ntaname: str) -> dict:
+    rec = _load_recommender()
+    key = _cache_key(activity)
+    scored = _custom_score_cache.get(key)
+    if scored is None:
+        scored = rec.score_activity(activity, _resolve_model_table_path())
+        _custom_score_cache[key] = scored
+    return rec.explain_neighborhood(scored, activity, ntaname)
 
 
 @app.post("/recommendations/custom")
@@ -174,6 +206,21 @@ async def custom_recommendations(request: Request, body: CustomRequest):
         raise HTTPException(status_code=500, detail=f"Recommender module unavailable: {e}")
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/recommendations/custom/explain")
+async def explain_custom_neighborhood(body: CustomExplainRequest):
+    activity = body.activity.strip()
+    ntaname = body.ntaname.strip()
+    if not activity or not ntaname:
+        raise HTTPException(status_code=400, detail="Activity and ntaname are required")
+
+    try:
+        return await run_in_threadpool(_explain_custom_neighborhood, activity, ntaname)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
