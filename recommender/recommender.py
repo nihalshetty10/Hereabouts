@@ -97,9 +97,18 @@ No explanation. No markdown."""
             try:
                 cleaned[key] = float(value)
             except (TypeError, ValueError):
-                cleaned[key] = 0.0
+                continue
+
+        if sum(abs(v) for v in cleaned.values()) < 0.01:
+            print(f"LLM returned zero weights for {activity} — using defaults")
+            return default_weights(activity)
+
+        merged = default_weights(activity)
+        for key, value in cleaned.items():
+            if key in merged:
+                merged[key] = value
         print(f"Weights generated for: {activity}")
-        return cleaned
+        return merged
     except Exception as e:
         print(f"LLM weight generation failed: {e} — using defaults")
         return default_weights(activity)
@@ -278,6 +287,25 @@ def default_weights(activity: str) -> dict:
             "persons_injured_last_7d": -0.5,
             "weather_score": 2.0
         }
+    elif any(w in activity_lower for w in ["soccer", "football", "sport", "sports", "basketball", "tennis", "hockey", "baseball", "athletic"]):
+        return {
+            "prob_active_noise_next_2h": -1.0,
+            "prob_active_complaints_next_2h": -0.5,
+            "prob_high_traffic_volume_next_2h": -1.5,
+            "prob_active_subway_ridership_next_2h": 0.5,
+            "prob_active_subway_transfers_next_2h": 0.5,
+            "bluesky_noise_signal": -0.5,
+            "bluesky_traffic_signal": -1.0,
+            "bluesky_crowding_signal": 0.0,
+            "bluesky_safety_signal": -2.0,
+            "bluesky_negative_signal": -1.0,
+            "nearby_events_count": 0.5,
+            "has_major_event": 0.5,
+            "crime_last_7d": -1.5,
+            "crashes_last_7d": -1.0,
+            "persons_injured_last_7d": -0.5,
+            "weather_score": 2.0
+        }
     else:
         return {
             "prob_active_noise_next_2h": -1.5,
@@ -297,6 +325,23 @@ def default_weights(activity: str) -> dict:
             "persons_injured_last_7d": -0.5,
             "weather_score": 1.5
         }
+
+def add_weather_score(df: pd.DataFrame) -> pd.DataFrame:
+    if "weather_score" in df.columns and df["weather_score"].notna().any():
+        return df
+    score = pd.Series(0.7, index=df.index)
+    if "precip_prob" in df.columns:
+        score = score - df["precip_prob"].fillna(0) * 0.4
+    if "temp_f" in df.columns:
+        score = score + ((df["temp_f"].fillna(65) - 50) / 50).clip(0, 0.3)
+    if "weather_main" in df.columns:
+        bad = df["weather_main"].fillna("").str.lower().isin(
+            ["rain", "snow", "thunderstorm", "drizzle"]
+        )
+        score = score - bad.astype(float) * 0.3
+    df = df.copy()
+    df["weather_score"] = score.clip(0, 1)
+    return df
 
 def math_score(row: pd.Series, weights: dict) -> float:
     raw = 0
@@ -392,7 +437,7 @@ def score_activity(
         model_table = attach_nta_centroids(model_table)
 
     weights = get_activity_weights(activity)
-    scored = model_table.copy()
+    scored = add_weather_score(model_table.copy())
     original_events_count = scored["nearby_events_count"].copy()
 
     for col in ["nearby_events_count", "crime_last_7d", "crashes_last_7d",
