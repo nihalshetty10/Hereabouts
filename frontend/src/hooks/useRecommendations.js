@@ -44,6 +44,11 @@ export default function useRecommendations(activity) {
     }, [activity, fetchRecommendations])
     
     const updateNeighborhood = (ntaname, data) => {
+        if (ntaname === '__replace__') {
+            setRecommendations(Array.isArray(data) ? data : [])
+            setLastUpdated(new Date())
+            return
+        }
         setRecommendations(prev => prev.map(r => r.ntaname === ntaname ? { ...r, ...data } : r))
     }
     return { recommendations, loading, lastUpdated, updateNeighborhood }

@@ -98,12 +98,12 @@ export default function App() {
     setSelectedDetail(rec || null)
     setPopupInfo({ lng: e.lngLat.lng, lat: e.lngLat.lat })
 
-    if (rec && !rec.summary) {
+    if (rec && !rec.summary && !isCustomMode) {
       setLoadingDetail(true)
       try {
         const res = await axios.get(
           `${API_URL}/neighborhoods/${encodeURIComponent(ntaname)}`,
-          { params: { activity: isCustomMode ? customInput : activity } }
+          { params: { activity } }
         )
         setSelectedDetail(res.data)
         updateNeighborhood(ntaname, res.data)
