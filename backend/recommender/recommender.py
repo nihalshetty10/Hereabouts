@@ -39,8 +39,31 @@ SIGNAL_COLS = [
 
 TOP_N_EXPLANATIONS = 20
 
-def get_activity_weights(activity: str) -> dict:
-    prompt = f"""You are helping score NYC neighborhoods for someone who wants to: "{activity}"
+def _parse_weight_response(text: str) -> dict:
+    text = text.replace("```json", "").replace("```", "").strip()
+    text = re.sub(r",\s*}", "}", text)
+    text = re.sub(r",\s*]", "]", text)
+    parsed = json.loads(text)
+    cleaned = {}
+    for key, value in parsed.items():
+        try:
+            cleaned[key] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return {col: cleaned.get(col, 0.0) for col in SIGNAL_COLS}
+
+
+def _request_llm_weights(activity: str, retry: bool = False) -> dict:
+    if retry:
+        prompt = f"""Activity: "{activity}"
+
+Assign a weight from -2 to +2 for each signal below. Use non-zero values wherever the signal matters for this activity.
+
+Signals: {", ".join(SIGNAL_COLS)}
+
+Return ONLY a JSON object with exactly these keys and numeric values. No explanation."""
+    else:
+        prompt = f"""You are helping score NYC neighborhoods for someone who wants to: "{activity}"
 
 Think carefully about what this activity actually needs:
 - Running/biking: low noise, low traffic, low crime, good weather. Crowds and events are BAD.
@@ -53,6 +76,7 @@ Think carefully about what this activity actually needs:
 - Commuting/travel: high subway ridership = GOOD. Traffic neutral. Everything else secondary.
 - Meditation/yoga: very quiet, very low crowding, low noise. Like coffee but even more quiet.
 - Exploring/photography: low crime, good weather. Everything else neutral.
+- Sports/soccer: open space, good weather, low traffic, safety matters. Sports events nearby are a plus.
 
 For each signal below, assign a weight from -2 to +2 based on the specific activity above:
 - Negative = makes neighborhood WORSE for this activity
@@ -80,251 +104,28 @@ Signals:
 Return ONLY a valid JSON object with exactly these keys and float values between -2 and +2.
 No explanation. No markdown."""
 
+    response = client().chat.completions.create(
+        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        max_tokens=400,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+    return _parse_weight_response(response.choices[0].message.content.strip())
+
+
+def get_activity_weights(activity: str) -> dict:
     try:
-        response = client().chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
-            max_tokens=400,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0
-        )
-        text = response.choices[0].message.content.strip()
-        text = text.replace("```json", "").replace("```", "").strip()
-        text = re.sub(r",\s*}", "}", text)
-        text = re.sub(r",\s*]", "]", text)
-        weights = json.loads(text)
-        cleaned = {}
-        for key, value in weights.items():
-            try:
-                cleaned[key] = float(value)
-            except (TypeError, ValueError):
-                continue
-
-        if sum(abs(v) for v in cleaned.values()) < 0.01:
-            print(f"LLM returned zero weights for {activity} — using defaults")
-            return default_weights(activity)
-
-        merged = default_weights(activity)
-        for key, value in cleaned.items():
-            if key in merged:
-                merged[key] = value
+        weights = _request_llm_weights(activity)
+        if sum(abs(v) for v in weights.values()) < 0.01:
+            print(f"LLM returned zero weights for {activity} — retrying")
+            weights = _request_llm_weights(activity, retry=True)
+        if sum(abs(v) for v in weights.values()) < 0.01:
+            raise ValueError(f"LLM returned all-zero weights for: {activity}")
         print(f"Weights generated for: {activity}")
-        return merged
+        return weights
     except Exception as e:
-        print(f"LLM weight generation failed: {e} — using defaults")
-        return default_weights(activity)
+        raise ValueError(f"LLM weight generation failed for {activity}: {e}") from e
 
-
-def default_weights(activity: str) -> dict:
-    activity_lower = activity.lower()
-    if any(w in activity_lower for w in ["run", "jog", "walk", "bike", "cycling"]):
-        return {
-            "prob_active_noise_next_2h": -1.5,
-            "prob_active_complaints_next_2h": -1.0,
-            "prob_high_traffic_volume_next_2h": -2.0,
-            "prob_active_subway_ridership_next_2h": 0.0,
-            "prob_active_subway_transfers_next_2h": 0.0,
-            "bluesky_noise_signal": -1.0,
-            "bluesky_traffic_signal": -1.5,
-            "bluesky_crowding_signal": -1.0,
-            "bluesky_safety_signal": -2.0,
-            "bluesky_negative_signal": -1.0,
-            "nearby_events_count": -0.5,
-            "has_major_event": -1.0,
-            "crime_last_7d": -1.5,
-            "crashes_last_7d": -1.5,
-            "persons_injured_last_7d": -1.0,
-            "weather_score": 2.0
-        }
-    elif any(w in activity_lower for w in ["night", "bar", "drink", "club", "out"]):
-        return {
-            "prob_active_noise_next_2h": 0.5,
-            "prob_active_complaints_next_2h": 0.0,
-            "prob_high_traffic_volume_next_2h": 0.0,
-            "prob_active_subway_ridership_next_2h": 1.5,
-            "prob_active_subway_transfers_next_2h": 1.0,
-            "bluesky_noise_signal": 0.5,
-            "bluesky_traffic_signal": 0.0,
-            "bluesky_crowding_signal": 0.5,
-            "bluesky_safety_signal": -1.5,
-            "bluesky_negative_signal": -1.0,
-            "nearby_events_count": 2.0,
-            "has_major_event": 1.5,
-            "crime_last_7d": -1.0,
-            "crashes_last_7d": -0.5,
-            "persons_injured_last_7d": -0.5,
-            "weather_score": 0.5
-        }
-    elif any(w in activity_lower for w in ["coffee", "study", "work", "read", "cafe"]):
-        return {
-            "prob_active_noise_next_2h": -2.0,
-            "prob_active_complaints_next_2h": -1.0,
-            "prob_high_traffic_volume_next_2h": 0.0,
-            "prob_active_subway_ridership_next_2h": 0.5,
-            "prob_active_subway_transfers_next_2h": 0.5,
-            "bluesky_noise_signal": -1.5,
-            "bluesky_traffic_signal": 0.0,
-            "bluesky_crowding_signal": -1.5,
-            "bluesky_safety_signal": -1.5,
-            "bluesky_negative_signal": -1.0,
-            "nearby_events_count": -1.0,
-            "has_major_event": -1.5,
-            "crime_last_7d": -1.0,
-            "crashes_last_7d": -0.5,
-            "persons_injured_last_7d": -0.5,
-            "weather_score": 1.0
-        }
-    elif any(w in activity_lower for w in ["eat", "dinner", "lunch", "brunch", "food", "restaurant"]):
-        return {
-            "prob_active_noise_next_2h": 0.0,
-            "prob_active_complaints_next_2h": -0.5,
-            "prob_high_traffic_volume_next_2h": 0.0,
-            "prob_active_subway_ridership_next_2h": 1.5,
-            "prob_active_subway_transfers_next_2h": 1.0,
-            "bluesky_noise_signal": 0.0,
-            "bluesky_traffic_signal": 0.0,
-            "bluesky_crowding_signal": 0.5,
-            "bluesky_safety_signal": -1.5,
-            "bluesky_negative_signal": -1.0,
-            "nearby_events_count": 0.0,
-            "has_major_event": 0.0,
-            "crime_last_7d": -1.5,
-            "crashes_last_7d": -0.5,
-            "persons_injured_last_7d": -0.5,
-            "weather_score": 1.0
-        }
-    elif any(w in activity_lower for w in ["date", "dating", "romantic"]):
-        return {
-            "prob_active_noise_next_2h": -1.0,
-            "prob_active_complaints_next_2h": -0.5,
-            "prob_high_traffic_volume_next_2h": -0.5,
-            "prob_active_subway_ridership_next_2h": 1.0,
-            "prob_active_subway_transfers_next_2h": 0.5,
-            "bluesky_noise_signal": -1.0,
-            "bluesky_traffic_signal": -0.5,
-            "bluesky_crowding_signal": -1.0,
-            "bluesky_safety_signal": -2.0,
-            "bluesky_negative_signal": -1.0,
-            "nearby_events_count": 0.5,
-            "has_major_event": 0.0,
-            "crime_last_7d": -2.0,
-            "crashes_last_7d": -0.5,
-            "persons_injured_last_7d": -0.5,
-            "weather_score": 1.5
-        }
-    elif any(w in activity_lower for w in ["shop", "shopping", "market", "store"]):
-        return {
-            "prob_active_noise_next_2h": 0.0,
-            "prob_active_complaints_next_2h": -0.5,
-            "prob_high_traffic_volume_next_2h": -0.5,
-            "prob_active_subway_ridership_next_2h": 2.0,
-            "prob_active_subway_transfers_next_2h": 1.5,
-            "bluesky_noise_signal": 0.0,
-            "bluesky_traffic_signal": -0.5,
-            "bluesky_crowding_signal": 0.5,
-            "bluesky_safety_signal": -1.5,
-            "bluesky_negative_signal": -1.0,
-            "nearby_events_count": 0.5,
-            "has_major_event": 0.0,
-            "crime_last_7d": -1.5,
-            "crashes_last_7d": -0.5,
-            "persons_injured_last_7d": -0.5,
-            "weather_score": 1.0
-        }
-    elif any(w in activity_lower for w in ["commute", "travel", "transit", "subway"]):
-        return {
-            "prob_active_noise_next_2h": 0.0,
-            "prob_active_complaints_next_2h": 0.0,
-            "prob_high_traffic_volume_next_2h": -1.0,
-            "prob_active_subway_ridership_next_2h": 2.0,
-            "prob_active_subway_transfers_next_2h": 2.0,
-            "bluesky_noise_signal": 0.0,
-            "bluesky_traffic_signal": -1.0,
-            "bluesky_crowding_signal": 0.0,
-            "bluesky_safety_signal": -1.0,
-            "bluesky_negative_signal": -0.5,
-            "nearby_events_count": 0.0,
-            "has_major_event": 0.0,
-            "crime_last_7d": -1.0,
-            "crashes_last_7d": -0.5,
-            "persons_injured_last_7d": -0.5,
-            "weather_score": 0.5
-        }
-    elif any(w in activity_lower for w in ["meditate", "yoga", "mindful", "quiet"]):
-        return {
-            "prob_active_noise_next_2h": -2.0,
-            "prob_active_complaints_next_2h": -1.5,
-            "prob_high_traffic_volume_next_2h": -1.0,
-            "prob_active_subway_ridership_next_2h": 0.0,
-            "prob_active_subway_transfers_next_2h": 0.0,
-            "bluesky_noise_signal": -2.0,
-            "bluesky_traffic_signal": -1.0,
-            "bluesky_crowding_signal": -2.0,
-            "bluesky_safety_signal": -1.5,
-            "bluesky_negative_signal": -1.0,
-            "nearby_events_count": -1.5,
-            "has_major_event": -2.0,
-            "crime_last_7d": -1.5,
-            "crashes_last_7d": -0.5,
-            "persons_injured_last_7d": -0.5,
-            "weather_score": 2.0
-        }
-    elif any(w in activity_lower for w in ["explore", "photo", "walk around", "wander", "tourist"]):
-        return {
-            "prob_active_noise_next_2h": 0.0,
-            "prob_active_complaints_next_2h": -0.5,
-            "prob_high_traffic_volume_next_2h": -0.5,
-            "prob_active_subway_ridership_next_2h": 1.0,
-            "prob_active_subway_transfers_next_2h": 0.5,
-            "bluesky_noise_signal": 0.0,
-            "bluesky_traffic_signal": -0.5,
-            "bluesky_crowding_signal": 0.0,
-            "bluesky_safety_signal": -1.5,
-            "bluesky_negative_signal": -1.0,
-            "nearby_events_count": 1.0,
-            "has_major_event": 0.5,
-            "crime_last_7d": -2.0,
-            "crashes_last_7d": -0.5,
-            "persons_injured_last_7d": -0.5,
-            "weather_score": 2.0
-        }
-    elif any(w in activity_lower for w in ["soccer", "football", "sport", "sports", "basketball", "tennis", "hockey", "baseball", "athletic"]):
-        return {
-            "prob_active_noise_next_2h": -1.0,
-            "prob_active_complaints_next_2h": -0.5,
-            "prob_high_traffic_volume_next_2h": -1.5,
-            "prob_active_subway_ridership_next_2h": 0.5,
-            "prob_active_subway_transfers_next_2h": 0.5,
-            "bluesky_noise_signal": -0.5,
-            "bluesky_traffic_signal": -1.0,
-            "bluesky_crowding_signal": 0.0,
-            "bluesky_safety_signal": -2.0,
-            "bluesky_negative_signal": -1.0,
-            "nearby_events_count": 0.5,
-            "has_major_event": 0.5,
-            "crime_last_7d": -1.5,
-            "crashes_last_7d": -1.0,
-            "persons_injured_last_7d": -0.5,
-            "weather_score": 2.0
-        }
-    else:
-        return {
-            "prob_active_noise_next_2h": -1.5,
-            "prob_active_complaints_next_2h": -1.0,
-            "prob_high_traffic_volume_next_2h": -1.0,
-            "prob_active_subway_ridership_next_2h": 0.5,
-            "prob_active_subway_transfers_next_2h": 0.5,
-            "bluesky_noise_signal": -1.0,
-            "bluesky_traffic_signal": -1.0,
-            "bluesky_crowding_signal": -1.0,
-            "bluesky_safety_signal": -1.5,
-            "bluesky_negative_signal": -1.0,
-            "nearby_events_count": 0.5,
-            "has_major_event": 0.0,
-            "crime_last_7d": -1.0,
-            "crashes_last_7d": -1.0,
-            "persons_injured_last_7d": -0.5,
-            "weather_score": 1.5
-        }
 
 def add_weather_score(df: pd.DataFrame) -> pd.DataFrame:
     if "weather_score" in df.columns and df["weather_score"].notna().any():
