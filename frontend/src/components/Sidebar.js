@@ -18,11 +18,13 @@ export default function Sidebar({
   const topNeighborhoods = React.useMemo(() => {
     let filtered = [...recommendations].sort((a, b) => b.score - a.score)
     if (distanceFilter && userLocation) {
-      filtered = filtered.filter(r => {
-        if (!r.latitude || !r.longitude) return false
-        const d = haversineDistance(userLocation.lat, userLocation.lng, r.latitude, r.longitude)
-        return d <= distanceFilter
-      })
+      const withDistance = filtered.filter(r => r.latitude && r.longitude)
+      if (withDistance.length) {
+        filtered = withDistance.filter(r => {
+          const d = haversineDistance(userLocation.lat, userLocation.lng, r.latitude, r.longitude)
+          return d <= distanceFilter
+        })
+      }
     }
     return filtered.slice(0, 10)
   }, [recommendations, distanceFilter, userLocation])

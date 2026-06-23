@@ -38,3 +38,42 @@ export const DISTANCE_OPTIONS = [
 ]
 
 export const REFRESH_INTERVAL = 2 * 60 * 60 * 1000
+
+export function getFeatureCentroid(feature) {
+  const geom = feature?.geometry
+  if (!geom?.coordinates) return null
+
+  let ring = null
+  if (geom.type === 'Polygon') ring = geom.coordinates[0]
+  else if (geom.type === 'MultiPolygon') ring = geom.coordinates[0]?.[0]
+  if (!ring?.length) return null
+
+  let lng = 0
+  let lat = 0
+  ring.forEach(([x, y]) => { lng += x; lat += y })
+  return { latitude: lat / ring.length, longitude: lng / ring.length }
+}
+
+export function buildCentroidMap(ntaGeojson) {
+  const map = {}
+  if (!ntaGeojson?.features) return map
+  ntaGeojson.features.forEach(f => {
+    const name = f.properties?.ntaname
+    const c = getFeatureCentroid(f)
+    if (name && c) map[name] = c
+  })
+  return map
+}
+
+export function enrichWithCentroids(recommendations, centroidMap) {
+  if (!Array.isArray(recommendations)) return []
+  return recommendations.map(r => {
+    const c = centroidMap[r.ntaname]
+    if (!c) return r
+    return {
+      ...r,
+      latitude: r.latitude ?? c.latitude,
+      longitude: r.longitude ?? c.longitude,
+    }
+  })
+}

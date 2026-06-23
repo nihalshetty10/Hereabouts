@@ -1,9 +1,10 @@
 import React from 'react'
-import { Popup } from 'react-map-gl'
+import { Popup } from 'react-map-gl/maplibre'
 import { getScoreColor } from '../utils/helpers'
 
 export default function DetailPopup({ popupInfo, detail, loading, onClose }) {
   if (!popupInfo || !detail) return null
+  if (!Number.isFinite(popupInfo.lng) || !Number.isFinite(popupInfo.lat)) return null
 
   return (
     <Popup
