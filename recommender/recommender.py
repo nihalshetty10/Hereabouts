@@ -375,6 +375,11 @@ def run_recommender(
     model_table = pd.read_csv(model_table_path)
     print(f"Loaded {len(model_table)} neighborhoods")
 
+    import sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from data.geo import attach_nta_centroids
+    model_table = attach_nta_centroids(model_table)
+
     weights = get_activity_weights(activity)
     print(f"Weights used: {weights}")
 

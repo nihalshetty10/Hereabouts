@@ -1,9 +1,14 @@
-import pandas as pd
-from sqlalchemy import create_engine
 import os
+import sys
+
+import pandas as pd
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
 
 load_dotenv()
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from data.geo import attach_nta_centroids
 
 engine = create_engine(os.getenv("DATABASE_URL"))
 
@@ -23,6 +28,7 @@ dfs = []
 for activity_key, filename in activities.items():
     if os.path.exists(filename):
         df = pd.read_csv(filename)
+        df = attach_nta_centroids(df)
         df["activity"] = activity_key
         df["summary"] = df["summary"].fillna("")
         df["pros"] = df["pros"].fillna("")

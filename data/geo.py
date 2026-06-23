@@ -108,6 +108,26 @@ def get_nta_centroids(nta: gpd.GeoDataFrame) -> pd.DataFrame:
         "longitude": centroids.geometry.x
     }).reset_index(drop=True)
 
+
+def attach_nta_centroids(
+    df: pd.DataFrame,
+    geojson_path: str = NTA_FILE
+) -> pd.DataFrame:
+    """Merge NTA centroid lat/lon onto a dataframe keyed by ntaname."""
+    out = df.copy()
+    has_coords = (
+        "latitude" in out.columns
+        and "longitude" in out.columns
+        and out["latitude"].notna().all()
+        and out["longitude"].notna().all()
+    )
+    if has_coords:
+        return out
+
+    centroids = get_nta_centroids(load_nta(geojson_path))
+    out = out.drop(columns=[c for c in ("latitude", "longitude") if c in out.columns])
+    return out.merge(centroids, on="ntaname", how="left")
+
 def run_spatial_joins(
     data_311: pd.DataFrame,
     data_crime: pd.DataFrame,

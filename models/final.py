@@ -62,7 +62,9 @@ def build_model_table_final(
     # placeholder — Bluesky signals added in recommender sprint
     df["bluesky_negative_signal"] = 0
 
-    df = df.fillna(0)
+    geo_cols = {"latitude", "longitude", "ntaname", "weather_main"}
+    num_cols = [c for c in df.select_dtypes(include="number").columns if c not in geo_cols]
+    df[num_cols] = df[num_cols].fillna(0)
 
     # keep only final columns that exist
     keep = [c for c in FINAL_COLS if c in df.columns]
