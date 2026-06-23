@@ -1,5 +1,6 @@
 import os
-import time
+import sys
+import json
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +11,8 @@ from dotenv import load_dotenv
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from starlette.concurrency import run_in_threadpool
 
 load_dotenv()
 
@@ -37,19 +40,23 @@ engine = create_engine(DATABASE_URL)
 limiter= Limiter(key_func=get_remote_address)
 app = FastAPI(title = "Hereabouts", version = "1.0.0")
 app.state.limiter = limiter
+
+
+async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"error": "Rate limit exceeded. Custom activity requests are limited to 1 per day."}
+    )
+
+
+app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
+app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
     allow_methods=["*"],
     allow_headers=["*"]
 )
-
-@app.exception_handler(RateLimitExceeded)
-async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
-        status_code=429,
-        content={"error": "Rate limit exceeded. Custom activity requests are limited to 1 per day."}
-    )
 
 @app.get("/health")
 async def health():
@@ -100,8 +107,7 @@ def get_neighborhood(ntaname: str, activity: str = "night_out"):
     return row_dict
 
 def _generate_and_cache(row: dict, activity_key: str) -> dict:
-    import sys
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    _load_run_recommender()
     from recommender.recommender import generate_explanation
     row_series = pd.Series(row)
     result = generate_explanation(row_series, activity_key)
@@ -132,34 +138,42 @@ def _generate_and_cache(row: dict, activity_key: str) -> dict:
 class CustomRequest(BaseModel):
     activity: str
 
-@app.post("/recommendations/custom")
-@limiter.limit("1/day")
 
-async def custom_recommendations(request: Request, body: CustomRequest):
-    import sys
+def _load_run_recommender():
     for path in (BACKEND_DIR, ROOT_DIR):
         if path not in sys.path:
             sys.path.insert(0, path)
-    try:
-        from recommender.recommender import run_recommender
-    except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Recommender module unavailable: {e}")
- 
+    from recommender.recommender import run_recommender
+    return run_recommender
+
+
+def _score_custom_activity(activity: str) -> list:
+    run_recommender = _load_run_recommender()
+    output = run_recommender(
+        activity=activity,
+        model_table_path=_resolve_model_table_path(),
+        output_path="/tmp/custom_scored.csv",
+        generate_explanations=False,
+    )
+    records = output.copy()
+    for col in records.select_dtypes(include=["category"]).columns:
+        records[col] = records[col].astype(str)
+    return json.loads(records.fillna("").to_json(orient="records"))
+
+
+@app.post("/recommendations/custom")
+@limiter.limit("1/day")
+async def custom_recommendations(request: Request, body: CustomRequest):
     activity = body.activity.strip()
     if not activity:
         raise HTTPException(status_code=400, detail="Activity cannot be empty")
- 
+
     try:
-        output = run_recommender(
-            activity=activity,
-            model_table_path=_resolve_model_table_path(),
-            output_path="/tmp/custom_scored.csv",
-            generate_explanations=False,
-        )
-        records = output.copy()
-        for col in records.select_dtypes(include=["category"]).columns:
-            records[col] = records[col].astype(str)
-        return records.fillna("").to_dict("records")
+        return await run_in_threadpool(_score_custom_activity, activity)
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Recommender module unavailable: {e}")
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
