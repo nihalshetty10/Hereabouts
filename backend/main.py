@@ -14,10 +14,22 @@ from slowapi.errors import RateLimitExceeded
 load_dotenv()
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_TABLE_PATH = os.getenv(
-    "MODEL_TABLE_PATH",
-    os.path.join(ROOT_DIR, "data", "model_table_final.csv"),
-)
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _resolve_model_table_path() -> str:
+    env_path = os.getenv("MODEL_TABLE_PATH")
+    if env_path and os.path.exists(env_path):
+        return env_path
+    for candidate in (
+        os.path.join(BACKEND_DIR, "model_table_final.csv"),
+        os.path.join(ROOT_DIR, "data", "model_table_final.csv"),
+        os.path.join(ROOT_DIR, "model_table_final.csv"),
+    ):
+        if os.path.exists(candidate):
+            return candidate
+    raise FileNotFoundError("model_table_final.csv not found in backend/ or data/")
+
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
@@ -135,11 +147,14 @@ async def custom_recommendations(request: Request, body: CustomRequest):
     try:
         output = run_recommender(
             activity=activity,
-            model_table_path=MODEL_TABLE_PATH,
+            model_table_path=_resolve_model_table_path(),
             output_path="/tmp/custom_scored.csv",
             generate_explanations=False,
         )
-        return output.fillna("").to_dict("records")
+        records = output.copy()
+        for col in records.select_dtypes(include=["category"]).columns:
+            records[col] = records[col].astype(str)
+        return records.fillna("").to_dict("records")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
