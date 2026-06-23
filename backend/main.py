@@ -137,8 +137,13 @@ class CustomRequest(BaseModel):
 
 async def custom_recommendations(request: Request, body: CustomRequest):
     import sys
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from recommender.recommender import run_recommender
+    for path in (BACKEND_DIR, ROOT_DIR):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    try:
+        from recommender.recommender import run_recommender
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"Recommender module unavailable: {e}")
  
     activity = body.activity.strip()
     if not activity:
