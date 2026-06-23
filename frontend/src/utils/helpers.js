@@ -20,7 +20,7 @@ export function haversineDistance(lat1, lon1, lat2, lon2) {
 export const PRESET_ACTIVITIES = [
     { key: 'running',   label: 'Running',    emoji: '🏃' },
     { key: 'night_out', label: 'Night Out',  emoji: '🌙' },
-    { key: 'coffee',    label: 'Coffee',     emoji: '☕' },
+    { key: 'coffee', label: 'Quiet Time', emoji: '🤫' },
     { key: 'biking',    label: 'Biking',     emoji: '🚲' },
     { key: 'park',      label: 'Park',       emoji: '🌳' },
     { key: 'eating',    label: 'Eating Out', emoji: '🍽️' },
